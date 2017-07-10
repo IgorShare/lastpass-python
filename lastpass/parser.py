@@ -6,7 +6,7 @@ from io import BytesIO
 import struct
 import re
 
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Util import number
 from Crypto.PublicKey import RSA
 
@@ -49,30 +49,41 @@ def parse_ACCT(chunk, encryption_key):
     """
     # TODO: Make a test case that covers secure note account
 
+    note = {}
+
     io = BytesIO(chunk.payload)
-    id = read_item(io)
-    name = decode_aes256_plain_auto(read_item(io), encryption_key)
-    group = decode_aes256_plain_auto(read_item(io), encryption_key)
-    url = decode_hex(read_item(io))
-    notes = decode_aes256_plain_auto(read_item(io), encryption_key)
+    note['id'] = read_item(io)
+    note['name'] = decode_aes256_plain_auto(read_item(io), encryption_key)
+    note['path'] = decode_aes256_plain_auto(read_item(io), encryption_key)
+    note['url'] = decode_hex(read_item(io))
+    note['notes'] = decode_aes256_plain_auto(read_item(io), encryption_key)
     skip_item(io, 2)
-    username = decode_aes256_plain_auto(read_item(io), encryption_key)
-    password = decode_aes256_plain_auto(read_item(io), encryption_key)
+    note['username'] = decode_aes256_plain_auto(read_item(io), encryption_key)
+    note['password'] = decode_aes256_plain_auto(read_item(io), encryption_key)
     skip_item(io, 2)
     secure_note = read_item(io)
+    note['note_type'] = ''
 
     # Parse secure note
     if secure_note == b"1":
         skip_item(io, 17)
-        secure_note_type = read_item(io)
+        note['note_type'] = read_item(io)
 
-        # Only "Server" secure note stores account information
-        if secure_note_type not in ALLOWED_SECURE_NOTE_TYPES:
-            return None
+    return note
 
-        url, username, password = parse_secure_note_server(notes)
 
-    return Account(id, name, username, password, url, group)
+def is_note_of_account_type(note):
+    return note['note_type'] in ALLOWED_SECURE_NOTE_TYPES
+
+
+def note_to_account(note):
+    # Only "Server" secure note stores account information
+    if note['note_type'] not in ALLOWED_SECURE_NOTE_TYPES:
+        return None
+
+    url, username, password = parse_secure_note_server(note['notes'])
+
+    return Account(note['id'], note['name'], username, password, url, note['group'])
 
 
 def parse_PRIK(chunk, encryption_key):
@@ -107,7 +118,11 @@ def parse_SHAR(chunk, encryption_key, rsa_key):
     # be decrypted first before use.
     if not key:
         # TODO: rsa_key.private_decrypt(encrypted_key, RSA_PKCS1_OAEP_PADDING)
-        key = decode_hex(rsa_key.decrypt(encrypted_key))
+        cipher = PKCS1_OAEP.new(rsa_key)
+        dkey = cipher.decrypt(encrypted_key)
+
+        #dkey = rsa_key.decrypt(encrypted_key)
+        key = decode_hex(dkey)
     else:
         key = decode_hex(decode_aes256_plain_auto(key, encryption_key))
 
@@ -123,7 +138,7 @@ def parse_secure_note_server(notes):
     password = None
 
     for i in notes.split(b'\n'):
-        if not i:  # blank line
+        if not i or b':' not in i:  # blank line or no :
             continue
         # Split only once so that strings like "Hostname:host.example.com:80"
         # get interpreted correctly

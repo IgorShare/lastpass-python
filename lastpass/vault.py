@@ -28,18 +28,25 @@ class Vault(object):
     def __init__(self, blob, encryption_key):
         """This more of an internal method, use one of the static constructors instead"""
         self.accounts = []
+        self.notes = []
 
         key = encryption_key
         rsa_private_key = None
+        group = ''
 
         for i in parser.extract_chunks(blob):
             if i.id == b'ACCT':
                 # TODO: Put shared folder name as group in the account
-                account = parser.parse_ACCT(i, key)
-                if account:
+                note = parser.parse_ACCT(i, key)
+                note['group'] = group
+                self.notes.append(note)
+                if note and parser.is_note_of_account_type(note):
+                    account = parser.note_to_account(note)
                     self.accounts.append(account)
             elif i.id == b'PRIK':
                 rsa_private_key = parser.parse_PRIK(i, encryption_key)
             elif i.id == b'SHAR':
                 # After SHAR chunk all the folliwing accounts are enrypted with a new key
-                key = parser.parse_SHAR(i, encryption_key, rsa_private_key)['encryption_key']
+                shared_group = parser.parse_SHAR(i, encryption_key, rsa_private_key)
+                group = shared_group['name']
+                key = shared_group['encryption_key']
