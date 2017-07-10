@@ -17,13 +17,14 @@ setup(
     description='LastPass Python API (unofficial)',
     long_description=open('README.rst').read(),
     license='MIT',
-    author='konomae',
-    author_email='konomae@users.noreply.github.com',
-    url='https://github.com/konomae/lastpass-python',
+    author='konomae,imoochnick',
+    author_email='konomae@users.noreply.github.com,imoochnick@users.noreply.github.com',
+    url='https://github.com/igorshare/lastpass-python',
     packages=['lastpass'],
     install_requires=[
         "requests>=1.2.1,<=3.0.0",
-        "pycrypto>=2.6.1",
+        #"pycrypto>=2.6.1",
+        "pycryptodome>=3.4.5",
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',
